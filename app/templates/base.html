@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block title %}{% endblock %} · Register DHK</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}"></head>
+<body>
+{% if current_user.is_authenticated %}
+<div class="shell">
+<aside class="side" id="side">
+  <div class="brand"><b>Register DHK</b><span>Distribusi dokumen hukum ke pihak ketiga</span></div>
+  <nav>
+    {% macro nav(ep, label, perm) %}{% if current_user.can(perm) %}<a href="{{ url_for(ep) }}" class="{{ 'on' if request.endpoint == ep }}">{{ label }}</a>{% endif %}{% endmacro %}
+    {{ nav('main.dashboard','Dashboard','dashboard') }}
+    {{ nav('main.register_list','Register distribusi','register_view') }}
+    {{ nav('main.register_new','Tambah register','register_edit') }}
+    {{ nav('main.register_import','Import template','register_import') }}
+    {{ nav('reports.reports','Laporan','report') }}
+    {% if current_user.can('param') or current_user.can('user') or current_user.can('role') or current_user.can('audit') %}<div class="grp">Administrasi</div>{% endif %}
+    {{ nav('admin.parameters','Parameter','param') }}
+    {{ nav('admin.users','Pengguna','user') }}
+    {{ nav('admin.roles','Hak akses','role') }}
+    {% if current_user.can('audit') %}<a href="{{ url_for('admin.audit_view') }}" class="{{ 'on' if request.endpoint == 'admin.audit_view' }}">Audit log &amp; keamanan{% if sec_warn %}<i class="dot" title="{{ sec_warn }} kejadian risiko tinggi dalam 24 jam">{{ sec_warn }}</i>{% endif %}</a>{% endif %}
+  </nav>
+  <div class="me"><b>{{ current_user.full_name or current_user.username }}</b><span>{{ current_user.role.name if current_user.role else 'Tanpa role' }}</span>
+    <a href="{{ url_for('auth.password') }}">Ubah password</a> <a href="{{ url_for('auth.logout') }}">Keluar</a></div>
+</aside>
+<main class="main"><button class="burger" id="burger" aria-label="Menu">Menu</button>
+{% else %}<main class="plain">{% endif %}
+{% with m = get_flashed_messages(with_categories=true) %}{% for c, t in m %}<div class="flash {{ c }}" role="alert">{{ t }}</div>{% endfor %}{% endwith %}
+{% block body %}{% endblock %}
+</main>
+{% if current_user.is_authenticated %}</div>{% endif %}
+<script src="{{ url_for('static', filename='js/chart.umd.js') }}"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body></html>

@@ -1,0 +1,24 @@
+{% extends 'base.html' %}{% from '_m.html' import head, kchip, yt, csrf %}{% block title %}Register #{{ r.id }}{% endblock %}
+{% block body %}{% call head('Register #' ~ r.id ~ ' · ' ~ r.dokumen_hukum|truncate(60), 'Dibuat oleh ' ~ (r.created_by or '-') ~ ', terakhir diubah ' ~ r.updated_at.strftime('%d/%m/%Y %H:%M') ~ ' oleh ' ~ (r.updated_by or '-')) %}
+{% if current_user.can('register_edit') %}<a class="btn" href="{{ url_for('main.register_edit', rid=r.id) }}">Ubah</a>{% endif %}
+{% if current_user.can('register_delete') %}<form method="post" action="{{ url_for('main.register_delete', rid=r.id) }}" data-confirm="Hapus register ini beserta seluruh lampirannya?">{{ csrf() }}<button class="btn danger">Hapus</button></form>{% endif %}{% endcall %}
+{% if issues %}<div class="flash error"><b>{{ issues|length }} temuan kontrol:</b> {{ issues|join(' · ') }}</div>{% else %}<div class="flash ok">Kontrol sesuai aturan klasifikasi {{ r.klasifikasi or '' }}.</div>{% endif %}
+<section class="grid2"><div class="card"><h3>Permintaan</h3><dl>
+<dt>Tanggal permintaan</dt><dd>{{ r.tanggal_permintaan.strftime('%d/%m/%Y') if r.tanggal_permintaan }}</dd><dt>Unit kerja / PIC</dt><dd>{{ r.unit_kerja }} / {{ r.pic or '-' }}</dd>
+<dt>Pihak ketiga</dt><dd>{{ r.pihak_ketiga }}</dd><dt>Tujuan</dt><dd>{{ r.tujuan or '-' }}</dd><dt>Media</dt><dd>{{ r.media or '-' }}</dd>
+<dt>Tanggal pengiriman</dt><dd>{{ r.tanggal_pengiriman.strftime('%d/%m/%Y') if r.tanggal_pengiriman else 'Belum dikirim' }}</dd><dt>PIC DHK</dt><dd>{{ r.pic_dhk or '-' }}</dd><dt>Keterangan</dt><dd>{{ r.keterangan or '-' }}</dd></dl></div>
+<div class="card"><h3>Klasifikasi &amp; kontrol</h3><dl><dt>Klasifikasi</dt><dd>{{ kchip(r.klasifikasi, {r.klasifikasi: meta}) }}</dd>
+<dt>Watermark</dt><dd>{{ yt(r.watermark) }} {{ r.isi_watermark }}</dd><dt>Password</dt><dd>{{ yt(r.password) }} {{ r.cara_kirim_password }}</dd>
+<dt>Data pribadi</dt><dd>{{ yt(r.data_pribadi) }}</dd><dt>Redaksi/masking</dt><dd>{{ yt(r.redaksi) }}</dd><dt>NDA</dt><dd>{{ yt(r.nda) }}</dd></dl></div></section>
+<section class="card"><h3>Dokumen terlampir (versi terbaru ditampilkan lebih dulu)</h3>
+{% for a in r.attachments %}<div class="att"><div><b>{{ a.name }}</b> <span class="chip" style="--c:#0f5c73">v{{ a.current.version }} terbaru</span></div>
+<table><thead><tr><th>Versi</th><th>Diunggah</th><th>Ukuran</th><th>Pemindaian</th><th>SHA-256</th><th></th></tr></thead><tbody>
+{% for v in a.versions %}<tr><td>v{{ v.version }}{% if v.note %}<small>{{ v.note }}</small>{% endif %}</td><td>{{ v.uploaded_at.strftime('%d/%m/%Y %H:%M') }}<small>{{ v.uploaded_by }}</small></td><td>{{ v.size|filesize }}</td>
+<td><span class="lv ok" title="{{ v.scan_detail }}">{{ v.scan_status }}</span></td><td><code>{{ v.sha256[:12] }}…</code></td>
+<td>{% if current_user.can('document_download') %}<a href="{{ url_for('main.download', vid=v.id) }}">Unduh</a>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+{% else %}<p class="empty">Belum ada dokumen. Unggah dokumen yang didistribusikan agar versi terbarunya tercatat.</p>{% endfor %}
+{% if current_user.can('document_upload') %}<form method="post" action="{{ url_for('main.upload', rid=r.id) }}" enctype="multipart/form-data" class="upload">{{ csrf() }}
+<label class="drop">Pilih file (PDF, Word, JPEG, PNG, Excel, CSV · maks. {{ config.MAX_CONTENT_LENGTH // 1048576 }} MB)<input type="file" name="files" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xls,.xlsx,.csv" required></label>
+<select name="attachment_id"><option value="">Dokumen baru / versi baru bila nama file sama</option>{% for a in r.attachments %}<option value="{{ a.id }}">Versi baru dari: {{ a.name }}</option>{% endfor %}</select>
+<input name="note" placeholder="Catatan perubahan (opsional)"><button class="btn pri">Pindai &amp; simpan</button>
+<small class="muted">Setiap file dipindai (tipe, signature, makro, skrip aktif{{ ', ClamAV' if config.CLAMAV_ENABLED }}) sebelum disimpan ke database.</small></form>{% endif %}</section>{% endblock %}

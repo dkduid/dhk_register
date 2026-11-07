@@ -1,0 +1,21 @@
+{% extends 'base.html' %}{% from '_m.html' import head, csrf %}{% block title %}{{ 'Ubah' if r.id else 'Tambah' }} register{% endblock %}
+{% macro yn(name, val, label, hint='') %}<fieldset class="yn"><legend>{{ label }}</legend><label><input type="radio" name="{{ name }}" value="Y" {{ 'checked' if val }}> Ya</label><label><input type="radio" name="{{ name }}" value="T" {{ 'checked' if not val }}> Tidak</label>{% if hint %}<small>{{ hint }}</small>{% endif %}</fieldset>{% endmacro %}
+{% macro sel(name, val, items, label, req=False) %}<label>{{ label }}<select name="{{ name }}" {{ 'required' if req }}><option value="">— pilih —</option>{% for p in items %}<option {{ 'selected' if val == p.label }}>{{ p.label }}</option>{% endfor %}{% if val and val not in items|map(attribute='label') %}<option selected>{{ val }}</option>{% endif %}</select></label>{% endmacro %}
+{% block body %}{{ head(('Ubah register #' ~ r.id) if r.id else 'Tambah register', 'Kolom bertanda * wajib diisi. Klasifikasi menentukan kontrol apa yang diwajibkan.') }}
+<script type="application/json" id="kmap">{{ kmap_json|tojson }}</script>
+<form method="post" class="form">{{ csrf() }}
+<section class="card"><h3>Permintaan</h3><div class="cols">
+<label>Tanggal permintaan *<input type="date" name="tanggal_permintaan" value="{{ r.tanggal_permintaan or '' }}" required></label>
+{{ sel('unit_kerja', r.unit_kerja, units, 'Unit kerja *', True) }}
+<label>PIC peminta<input name="pic" value="{{ r.pic or '' }}"></label>
+<label class="w2">Dokumen hukum *<input name="dokumen_hukum" value="{{ r.dokumen_hukum or '' }}" required></label>
+<label class="w2">Pihak ketiga penerima *<input name="pihak_ketiga" value="{{ r.pihak_ketiga or '' }}" required></label>
+{{ sel('tujuan', r.tujuan, tujuan, 'Tujuan') }}{{ sel('media', r.media, media, 'Media pengiriman') }}</div></section>
+<section class="card"><h3>Klasifikasi &amp; kontrol pengamanan</h3>
+{{ sel('klasifikasi', r.klasifikasi, klas, 'Klasifikasi informasi') }}<div id="klas-hint" class="hint"></div>
+<div class="cols">{{ yn('watermark', r.watermark, 'Watermark') }}<label class="dep" data-dep="watermark">Isi watermark<input name="isi_watermark" value="{{ r.isi_watermark or '' }}" placeholder="Confidential - PT ABC - Due Diligence"></label>
+{{ yn('password', r.password, 'Dilindungi password') }}<div class="dep" data-dep="password">{{ sel('cara_kirim_password', r.cara_kirim_password, cara, 'Cara kirim password') }}</div>
+{{ yn('data_pribadi', r.data_pribadi, 'Memuat data pribadi') }}{{ yn('redaksi', r.redaksi, 'Redaksi / masking', 'Sebagian informasi disamarkan') }}{{ yn('nda', r.nda, 'NDA dengan pihak ketiga') }}</div></section>
+<section class="card"><h3>Pengiriman</h3><div class="cols"><label>Tanggal pengiriman<input type="date" name="tanggal_pengiriman" value="{{ r.tanggal_pengiriman or '' }}"></label>
+<label>PIC DHK<input name="pic_dhk" value="{{ r.pic_dhk or '' }}"></label><label class="w2">Keterangan<textarea name="keterangan" rows="3">{{ r.keterangan or '' }}</textarea></label></div></section>
+<div class="bar"><button class="btn pri">Simpan register</button><a class="btn" href="{{ url_for('main.register_detail', rid=r.id) if r.id else url_for('main.register_list') }}">Batal</a></div></form>{% endblock %}

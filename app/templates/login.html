@@ -1,0 +1,9 @@
+{% extends 'base.html' %}{% block title %}Masuk{% endblock %}
+{% block body %}
+<div class="login"><div class="lbrand"><h1>Register DHK</h1><p>Kontrol penerbitan, pengiriman, dan pengamanan dokumen hukum kepada pihak ketiga.</p>
+<ul><li>Klasifikasi &amp; kontrol per dokumen</li><li>Pemindaian file sebelum disimpan</li><li>Seluruh akses tercatat di audit log</li></ul></div>
+<form method="post" class="card lform"><h2>Masuk</h2>{% from '_m.html' import csrf %}{{ csrf() }}
+<label>Username<input name="username" autocomplete="username" required autofocus></label>
+<label>Password<input type="password" name="password" autocomplete="current-password" required></label>
+<button class="btn pri">Masuk</button><a class="lnk" href="{{ url_for('auth.forgot') }}">Lupa password?</a><small class="muted">Akun lokal atau akun domain (LDAP), sesuai pendaftaran admin.</small></form></div>
+{% endblock %}

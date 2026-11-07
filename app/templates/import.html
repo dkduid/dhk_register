@@ -1,0 +1,8 @@
+{% extends 'base.html' %}{% from '_m.html' import head, csrf %}{% block title %}Import{% endblock %}
+{% block body %}{% call head('Import register dari template', 'Isi massal lewat Excel atau CSV dengan kolom seperti formulir register.') %}<a class="btn" href="{{ url_for('main.template_xlsx') }}">Unduh template Excel</a>{% endcall %}
+<section class="grid2"><div class="card"><h3>Unggah file</h3><form method="post" enctype="multipart/form-data" class="form">{{ csrf() }}
+<label class="drop">Pilih file template (.xlsx atau .csv)<input type="file" name="file" accept=".xlsx,.csv" required></label><button class="btn pri">Pindai &amp; impor</button></form>
+<p class="muted">File dipindai lebih dulu. Baris tanpa Dokumen Hukum atau Pihak Ketiga akan dilewati dan dilaporkan.</p></div>
+<div class="card"><h3>Cara pakai</h3><ol><li>Unduh template; dropdown Y/T, klasifikasi, dan unit kerja sudah terisi dari menu Parameter.</li><li>Isi satu baris per pengiriman. Tanggal: dd/mm/yyyy.</li><li>Unggah kembali file di sini.</li></ol></div></section>
+{% if result %}<section class="card"><h3>Hasil import</h3><p><b>{{ result[0] }}</b> baris berhasil masuk, <b>{{ result[1]|length }}</b> baris ditolak.</p>
+{% if result[1] %}<ul class="errs">{% for e in result[1][:50] %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}<a class="btn" href="{{ url_for('main.register_list') }}">Lihat register</a></section>{% endif %}{% endblock %}

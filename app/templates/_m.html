@@ -1,0 +1,7 @@
+{% macro head(title, sub) %}<header class="ph"><div><h1>{{ title }}</h1>{% if sub %}<p>{{ sub }}</p>{% endif %}</div><div class="acts">{{ caller() if caller else '' }}</div></header>{% endmacro %}
+{% macro yt(v) %}<span class="yt {{ 'y' if v else 't' }}">{{ 'Y' if v else 'T' }}</span>{% endmacro %}
+{% macro kchip(label, kmap) %}{% if label %}<span class="chip" style="--c: {{ (kmap.get(label) or {}).get('color', '#64748b') }}">{{ label }}</span>{% else %}<span class="muted">-</span>{% endif %}{% endmacro %}
+{% macro pager(pg) %}{% if pg.pages > 1 %}<nav class="pager"><span>{{ pg.total }} data · halaman {{ pg.page }} dari {{ pg.pages }}</span>
+{% if pg.has_prev %}<a href="{{ url_for(request.endpoint, **dict(request.args.to_dict(), page=pg.prev_num)) }}">‹ Sebelumnya</a>{% endif %}
+{% if pg.has_next %}<a href="{{ url_for(request.endpoint, **dict(request.args.to_dict(), page=pg.next_num)) }}">Berikutnya ›</a>{% endif %}</nav>{% else %}<nav class="pager"><span>{{ pg.total }} data</span></nav>{% endif %}{% endmacro %}
+{% macro csrf() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endmacro %}

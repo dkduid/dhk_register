@@ -1,0 +1,11 @@
+{% extends 'base.html' %}{% block title %}Lupa password{% endblock %}
+{% block body %}{% from '_m.html' import csrf %}
+<div class="login"><div class="lbrand"><h1>Register DHK</h1><p>Pemulihan akses akun.</p>
+<ul><li>Permintaan Anda dicatat di audit log</li><li>Administrator akan membuat password sementara</li><li>Password sementara wajib diganti saat login</li></ul></div>
+<form method="post" class="card lform"><h2>Lupa password</h2>{{ csrf() }}
+{% if sent %}<div class="flash ok" role="status">Jika username terdaftar, permintaan Anda sudah dicatat dan administrator akan menindaklanjuti. Hubungi administrator atau Divisi TI bila mendesak.</div>
+<a class="btn" href="{{ url_for('auth.login') }}">Kembali ke halaman masuk</a>
+{% else %}<label>Username<input name="username" autocomplete="username" required autofocus></label>
+<button class="btn pri">Kirim permintaan reset</button>
+<small class="muted">Aplikasi tidak mengirim email. Administrator akan membuatkan password sementara melalui menu Pengguna. Akun domain (LDAP): reset password melalui direktori perusahaan. <a href="{{ url_for('auth.login') }}">Kembali</a></small>{% endif %}</form></div>
+{% endblock %}

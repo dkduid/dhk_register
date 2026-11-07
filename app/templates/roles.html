@@ -1,0 +1,9 @@
+{% extends 'base.html' %}{% from '_m.html' import head, csrf %}{% block title %}Hak akses{% endblock %}
+{% block body %}{{ head('Hak akses', 'Role menentukan menu dan aksi yang tersedia bagi pengguna.') }}
+<section class="grid2 wideleft"><div class="card flush scroll"><table><thead><tr><th>Role</th>{% for k, v in PERMS.items() %}<th class="rot"><span>{{ v }}</span></th>{% endfor %}<th></th></tr></thead><tbody>
+{% for r in roles %}<tr><td><b>{{ r.name }}</b><small>{{ r.description }} · {{ r.users|length }} pengguna</small></td>{% for k in PERMS %}<td class="c">{{ '●' if k in (r.permissions or []) else '' }}</td>{% endfor %}
+<td class="acts"><a href="{{ url_for('admin.roles', edit=r.id) }}">Ubah</a><form method="post" action="{{ url_for('admin.role_delete', rid=r.id) }}" data-confirm="Hapus role ini?">{{ csrf() }}<button class="lnk danger">Hapus</button></form></td></tr>{% endfor %}</tbody></table></div>
+<form method="post" action="{{ url_for('admin.role_save') }}" class="card form">{{ csrf() }}<h3>{{ 'Ubah role' if edit else 'Tambah role' }}</h3>{% if edit %}<input type="hidden" name="id" value="{{ edit.id }}">{% endif %}
+<label>Nama role<input name="name" value="{{ edit.name if edit }}" required></label><label>Deskripsi<input name="description" value="{{ edit.description if edit }}"></label>
+<fieldset class="yn col"><legend>Menu &amp; aksi yang diizinkan</legend>{% for k, v in PERMS.items() %}<label><input type="checkbox" name="perms" value="{{ k }}" {{ 'checked' if edit and k in (edit.permissions or []) }}> {{ v }}</label>{% endfor %}</fieldset>
+<button class="btn pri">Simpan role</button>{% if edit %}<a class="btn" href="{{ url_for('admin.roles') }}">Batal</a>{% endif %}</form></section>{% endblock %}

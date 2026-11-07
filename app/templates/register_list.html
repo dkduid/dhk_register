@@ -1,0 +1,21 @@
+{% extends 'base.html' %}{% from '_m.html' import head, kchip, yt, pager %}{% block title %}Register{% endblock %}
+{% block body %}{% call head('Register distribusi', 'Setiap baris adalah satu pengiriman dokumen hukum ke pihak ketiga.') %}
+{% if current_user.can('register_import') %}<a class="btn" href="{{ url_for('main.register_import') }}">Import template</a>{% endif %}
+{% if current_user.can('register_edit') %}<a class="btn pri" href="{{ url_for('main.register_new') }}">Tambah register</a>{% endif %}{% endcall %}
+<form class="filters card" method="get"><input name="q" value="{{ request.args.q }}" placeholder="Cari dokumen, pihak ketiga, PIC…">
+<select name="klasifikasi"><option value="">Semua klasifikasi</option>{% for p in klas %}<option {{ 'selected' if request.args.klasifikasi == p.label }}>{{ p.label }}</option>{% endfor %}</select>
+<select name="unit_kerja"><option value="">Semua unit kerja</option>{% for p in units %}<option {{ 'selected' if request.args.unit_kerja == p.label }}>{{ p.label }}</option>{% endfor %}</select>
+<select name="nda"><option value="">NDA: semua</option><option value="Y" {{ 'selected' if request.args.nda == 'Y' }}>NDA ada</option><option value="T" {{ 'selected' if request.args.nda == 'T' }}>Tanpa NDA</option></select>
+<select name="data_pribadi"><option value="">Data pribadi: semua</option><option value="Y" {{ 'selected' if request.args.data_pribadi == 'Y' }}>Memuat data pribadi</option><option value="T" {{ 'selected' if request.args.data_pribadi == 'T' }}>Tanpa data pribadi</option></select>
+<input type="date" name="dari" value="{{ request.args.dari }}" title="Dari tanggal"><input type="date" name="sampai" value="{{ request.args.sampai }}" title="Sampai tanggal">
+<button class="btn">Terapkan</button><a href="{{ url_for('main.register_list') }}">Reset</a></form>
+<div class="card flush scroll"><table class="wide"><thead><tr><th>No</th><th>Tgl permintaan</th><th>Unit kerja / PIC</th><th>Dokumen hukum</th><th>Pihak ketiga</th><th>Klasifikasi</th><th title="Watermark">WM</th><th title="Password">PW</th><th title="Data pribadi">DP</th><th title="Redaksi/masking">RM</th><th>NDA</th><th>Dikirim</th><th>Kontrol</th></tr></thead><tbody>
+{% for r in pg.items %}<tr><td>{{ r.id }}</td><td>{{ r.tanggal_permintaan.strftime('%d/%m/%Y') if r.tanggal_permintaan }}</td><td>{{ r.unit_kerja }}<small>{{ r.pic }}</small></td>
+<td><a href="{{ url_for('main.register_detail', rid=r.id) }}">{{ r.dokumen_hukum|truncate(48) }}</a>{% if r.attachments %}<small>{{ r.attachments|length }} lampiran</small>{% endif %}</td>
+<td>{{ r.pihak_ketiga|truncate(36) }}<small>{{ r.tujuan }}</small></td><td>{{ kchip(r.klasifikasi, kmap) }}</td>
+<td>{{ yt(r.watermark) }}</td><td>{{ yt(r.password) }}</td><td>{{ yt(r.data_pribadi) }}</td><td>{{ yt(r.redaksi) }}</td><td>{{ yt(r.nda) }}</td>
+<td>{{ r.tanggal_pengiriman.strftime('%d/%m/%Y') if r.tanggal_pengiriman else 'Belum' }}</td>
+<td>{% if comp[r.id] %}<span class="lv high" title="{{ comp[r.id]|join('; ') }}">{{ comp[r.id]|length }} temuan</span>{% else %}<span class="lv ok">Sesuai</span>{% endif %}</td></tr>
+{% else %}<tr><td colspan="13" class="empty">Tidak ada data yang cocok. Ubah filter atau tambah register baru.</td></tr>{% endfor %}</tbody></table></div>
+{{ pager(pg) }}<p class="muted">WM = watermark · PW = password · DP = data pribadi · RM = redaksi/masking. Arahkan kursor ke “temuan” untuk melihat detailnya.</p>
+{% endblock %}

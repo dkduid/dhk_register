@@ -1,0 +1,19 @@
+{% extends 'base.html' %}{% from '_m.html' import head, csrf %}{% block title %}Parameter{% endblock %}
+{% block body %}{{ head('Parameter', 'Daftar pilihan yang muncul di form. Tambah, ubah, nonaktifkan, atau hapus tanpa mengubah kode.') }}
+<div class="tabs">{% for c in cats %}<a href="{{ url_for('admin.parameters', cat=c) }}" class="{{ 'on' if c == cat }}">{{ CAT_LABEL.get(c, c.replace('_', ' ').title()) }}</a>{% endfor %}</div>
+<section class="grid2 wideleft"><div class="card flush"><table><thead><tr><th>Urut</th><th>Nama</th>{% if cat == 'KLASIFIKASI' %}<th>Level</th><th>Kontrol wajib</th>{% endif %}<th>Status</th><th></th></tr></thead><tbody>
+{% for p in items %}<tr class="{{ '' if p.active else 'off' }}"><td>{{ p.sort_order }}</td><td>{% if cat == 'KLASIFIKASI' %}<span class="chip" style="--c:{{ p.meta.get('color', '#64748b') }}">{{ p.label }}</span>{% else %}{{ p.label }}{% endif %}<small>{{ p.description|truncate(90) }}</small></td>
+{% if cat == 'KLASIFIKASI' %}<td>{{ p.meta.get('level', '') }}</td><td>{{ ['Watermark' if p.meta.get('req_wm'), 'Password' if p.meta.get('req_pw'), 'NDA' if p.meta.get('req_nda')]|select|join(', ') or '-' }}</td>{% endif %}
+<td>{{ 'Aktif' if p.active else 'Nonaktif' }}</td><td class="acts"><a href="{{ url_for('admin.parameters', cat=cat, edit=p.id) }}">Ubah</a>
+<form method="post" action="{{ url_for('admin.parameter_act', pid=p.id, act='toggle') }}">{{ csrf() }}<button class="lnk">{{ 'Nonaktifkan' if p.active else 'Aktifkan' }}</button></form>
+<form method="post" action="{{ url_for('admin.parameter_act', pid=p.id, act='delete') }}" data-confirm="Hapus parameter ini? Data register lama tetap menyimpan teksnya.">{{ csrf() }}<button class="lnk danger">Hapus</button></form></td></tr>
+{% else %}<tr><td colspan="6" class="empty">Belum ada isi. Tambahkan lewat form di samping.</td></tr>{% endfor %}</tbody></table></div>
+<form method="post" action="{{ url_for('admin.parameter_save') }}" class="card form">{{ csrf() }}<h3>{{ 'Ubah parameter' if edit else 'Tambah parameter' }}</h3>
+{% if edit %}<input type="hidden" name="id" value="{{ edit.id }}">{% endif %}<input type="hidden" name="category" value="{{ cat }}">
+<label>Nama<input name="label" value="{{ edit.label if edit }}" required></label><label>Deskripsi / panduan penanganan<textarea name="description" rows="3">{{ edit.description if edit }}</textarea></label>
+<label>Urutan<input type="number" name="sort_order" value="{{ edit.sort_order if edit else 0 }}"></label>
+{% if cat == 'KLASIFIKASI' %}<div class="cols"><label>Level (1 rendah – 4 tinggi)<input type="number" name="level" min="0" max="9" value="{{ edit.meta.get('level', '') if edit }}"></label><label>Warna<input type="color" name="color" value="{{ edit.meta.get('color', '#64748b') if edit else '#64748b' }}"></label></div>
+<fieldset class="yn"><legend>Kontrol yang wajib untuk klasifikasi ini</legend><label><input type="checkbox" name="req_wm" value="1" {{ 'checked' if edit and edit.meta.get('req_wm') }}> Watermark</label><label><input type="checkbox" name="req_pw" value="1" {{ 'checked' if edit and edit.meta.get('req_pw') }}> Password</label><label><input type="checkbox" name="req_nda" value="1" {{ 'checked' if edit and edit.meta.get('req_nda') }}> NDA</label></fieldset>{% endif %}
+<label>Status<select name="active"><option value="1">Aktif</option><option value="0" {{ 'selected' if edit and not edit.active }}>Nonaktif</option></select></label>
+<button class="btn pri">Simpan</button>{% if edit %}<a class="btn" href="{{ url_for('admin.parameters', cat=cat) }}">Batal</a>{% endif %}
+{% if not edit %}<hr><label>Atau buat kategori baru<input name="new_category" placeholder="mis. JENIS_DOKUMEN"></label><small class="muted">Isi nama kategori baru lalu simpan; item pertama dibuat di kategori itu.</small>{% endif %}</form></section>{% endblock %}

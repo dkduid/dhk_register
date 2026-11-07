@@ -1,0 +1,26 @@
+# Rahasia & konfigurasi lokal
+.env
+.env.bak_*
+*.pem
+*.key
+certs/
+# Runtime
+logs/
+uploads/
+instance/
+*.db
+*.sqlite3
+# Python / build
+__pycache__/
+*.pyc
+.venv/
+venv/
+build/
+dist/
+installers/*.exe
+*.spec.bak
+# Editor / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
