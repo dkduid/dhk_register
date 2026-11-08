@@ -53,3 +53,7 @@ Kejadian risiko tinggi memberi lencana merah di menu Audit log dan tampil di Das
 - Ganti `SECRET_KEY`; gunakan sertifikat TLS resmi; batasi akses jaringan ke PostgreSQL.
 - Pemindai internal bersifat heuristik; untuk antivirus penuh aktifkan ClamAV (`CLAMAV_ENABLED=true`).
 - Backup database rutin; audit log sebaiknya diarsipkan berkala (kebijakan retensi sesuai ketentuan).
+
+
+## Pemasangan di WSL2 (alternatif .exe)
+Jalankan `wsl\Install_WSL.bat` sebagai Administrator (tambahkan `-Lan` untuk akses jaringan). Rincian: `docs/10_Panduan_Instalasi_WSL2.md`.
