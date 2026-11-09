@@ -19,6 +19,7 @@ PERMS = {
     "user": "Kelola pengguna",
     "role": "Kelola hak akses",
     "audit": "Audit log & peringatan keamanan",
+    "all_divisions": "Melihat data semua divisi",
 }
 
 class Role(db.Model):
@@ -41,6 +42,7 @@ class User(UserMixin, db.Model):
     locked_until = db.Column(db.DateTime)
     last_login = db.Column(db.DateTime)
     must_change_pw = db.Column(db.Boolean, default=False)
+    unit_kerja = db.Column(db.String(150), default="")  # divisi pengguna; membatasi data bila role tanpa "all_divisions"
     created_at = db.Column(db.DateTime, default=datetime.now)
     role = db.relationship("Role", back_populates="users")
 

@@ -3,7 +3,7 @@
 <form class="filters card" method="get" id="rep"><select name="jenis"><option value="register">Register distribusi</option>{% if current_user.can('audit') %}<option value="audit" {{ 'selected' if request.args.jenis == 'audit' }}>Audit log</option>{% endif %}</select>
 <label>Dari<input type="date" name="dari" value="{{ request.args.dari }}"></label><label>Sampai<input type="date" name="sampai" value="{{ request.args.sampai }}"></label>
 <select name="klasifikasi"><option value="">Semua klasifikasi</option>{% for p in klas %}<option {{ 'selected' if request.args.klasifikasi == p.label }}>{{ p.label }}</option>{% endfor %}</select>
-<select name="unit_kerja"><option value="">Semua unit kerja</option>{% for p in units %}<option {{ 'selected' if request.args.unit_kerja == p.label }}>{{ p.label }}</option>{% endfor %}</select>
+{% if div_scope is none %}<select name="unit_kerja"><option value="">Semua unit kerja</option>{% for p in units %}<option {{ 'selected' if request.args.unit_kerja == p.label }}>{{ p.label }}</option>{% endfor %}</select>{% endif %}
 <button class="btn pri" name="lihat" value="1">Tampilkan</button></form>
 {% if prev %}<section class="card"><h3>{{ prev[0] }} <small class="muted">{{ prev[3] }} baris{% if prev[3] > 100 %} (pratinjau 100 baris pertama){% endif %}</small></h3>
 <div class="dl"><b>Unduh:</b>{% for k, v in FMT.items() %}<a class="btn" href="{{ url_for('reports.download', format=k, **request.args.to_dict()) }}">{{ v }}</a>{% endfor %}</div>

@@ -137,5 +137,57 @@ with app.app_context():
     chk("akun terhapus & audit HAPUS_USER ada", User.query.filter_by(username="tmpdel").first() is None and AuditLog.query.filter_by(action="HAPUS_USER").count() == 1)
     aid = User.query.filter_by(username="admin").first().id
 r = c.post(f"/admin/pengguna/{aid}/hapus", follow_redirects=True); chk("tidak bisa hapus diri sendiri", b"sedang dipakai" in r.data)
+# --- pembatasan data per divisi ---
+TI, KEU = "Divisi Teknologi Informasi", "Keuangan"
+with app.app_context():
+    for i, (u, d) in enumerate([(TI, "Dok-TI-Rahasia"), (KEU, "Dok-KEU-Rahasia")]):
+        db.session.add(Register(unit_kerja=u, dokumen_hukum=d, pihak_ketiga="PT Uji", tanggal_permintaan=date.today(), klasifikasi="Rahasia", created_by="t"))
+    db.session.commit()
+    ids = {r.dokumen_hukum: r.id for r in Register.query.filter(Register.dokumen_hukum.like("Dok-%")).all()}
+c.post("/admin/hak-akses/save", data={"name": "Staf Divisi", "perms": ["dashboard", "register_view", "register_edit", "register_import", "document_upload", "document_download", "report"]}, follow_redirects=True)
+with app.app_context():
+    from app.models import Role
+    sid = Role.query.filter_by(name="Staf Divisi").first().id
+for un, unit in (("staf_ti", TI), ("staf_keu", KEU), ("staf_kosong", "")):
+    c.post("/admin/pengguna/save", data={"username": un, "full_name": un, "role_id": sid, "unit_kerja": unit, "password": "Staf#Passw0rd1", "active": "1"}, follow_redirects=True)
+def login_as(un):
+    cc = app.test_client(); cc.post("/login", data={"username": un, "password": "Staf#Passw0rd1"}, follow_redirects=True)
+    cc.post("/password", data={"old": "Staf#Passw0rd1", "new": "Staf#Passw0rd2", "new2": "Staf#Passw0rd2"}, follow_redirects=True); return cc
+ti = login_as("staf_ti"); ke = login_as("staf_keu"); ko = login_as("staf_kosong")
+r = ti.get("/register"); chk("staf TI hanya melihat register TI", b"Dok-TI-Rahasia" in r.data and b"Dok-KEU-Rahasia" not in r.data)
+r = c.get("/register"); chk("admin melihat semua divisi", b"Dok-TI-Rahasia" in r.data and b"Dok-KEU-Rahasia" in r.data)
+r = ti.get("/dashboard"); chk("dashboard staf TI hanya divisi TI", b"Keuangan" not in r.data and b"Data dibatasi pada divisi" in r.data)
+r = ti.get(f"/register/{ids['Dok-KEU-Rahasia']}"); chk("detail divisi lain ditolak (403)", r.status_code == 403, r.status_code)
+r = ti.post(f"/register/{ids['Dok-KEU-Rahasia']}/upload", data={"files": (io.BytesIO(b"x"), "a.txt")}, content_type="multipart/form-data"); chk("upload ke divisi lain ditolak", r.status_code == 403, r.status_code)
+r = ti.post(f"/register/{ids['Dok-KEU-Rahasia']}/delete"); chk("hapus divisi lain ditolak", r.status_code in (403,), r.status_code)
+r = ti.get(f"/register/{ids['Dok-TI-Rahasia']}"); chk("detail divisi sendiri terbuka", r.status_code == 200, r.status_code)
+r = ti.get("/laporan?jenis=register&lihat=1"); chk("laporan staf TI hanya divisi TI", b"Dok-TI-Rahasia" in r.data and b"Dok-KEU-Rahasia" not in r.data)
+r = ti.get("/laporan/unduh?jenis=register&format=csv"); chk("unduh laporan dibatasi divisi", b"Dok-TI-Rahasia" in r.data and b"Dok-KEU-Rahasia" not in r.data)
+r = ti.post("/register/new", data={**f, "unit_kerja": KEU, "dokumen_hukum": "Dok-TI-Baru"}, follow_redirects=True)
+with app.app_context():
+    nr = Register.query.filter_by(dokumen_hukum="Dok-TI-Baru").first()
+chk("register baru dipaksa ke divisi pengguna", nr is not None and nr.unit_kerja == TI, nr.unit_kerja if nr else None)
+csv = "Unit Kerja,Dokumen Hukum,Pihak Ketiga\nKeuangan,Dok-Impor,PT X\n".encode()
+ti.post("/register/import", data={"file": (io.BytesIO(csv), "t.csv")}, content_type="multipart/form-data", follow_redirects=True)
+with app.app_context():
+    ir = Register.query.filter_by(dokumen_hukum="Dok-Impor").first()
+chk("import dipaksa ke divisi pengguna", ir is not None and ir.unit_kerja == TI, ir.unit_kerja if ir else None)
+r = ko.get("/register"); chk("pengguna tanpa divisi tidak melihat data + peringatan", b"Dok-" not in r.data and b"belum dikaitkan dengan divisi" in r.data)
+r = ko.post("/register/new", data=f, follow_redirects=True); chk("pengguna tanpa divisi tidak bisa menambah", b"belum dikaitkan" in r.data)
+with app.app_context():
+    chk("audit AKSES_DIVISI_DITOLAK tercatat", AuditLog.query.filter_by(action="AKSES_DIVISI_DITOLAK").count() >= 2)
+r = c.get("/admin/pengguna"); chk("daftar pengguna menampilkan divisi", b"Divisi" in r.data and b"Belum diatur" in r.data)
+r = c.get("/admin/hak-akses"); chk("izin 'semua divisi' tampil di matriks", "Melihat data semua divisi".encode() in r.data)
+with app.app_context():
+    sa = Role.query.filter_by(name="Super Admin").first(); ad = Role.query.filter_by(name="Administrator").first()
+    chk("Super Admin & Administrator punya izin semua divisi", sa and "all_divisions" in sa.permissions and "all_divisions" in ad.permissions)
+# migrasi DB lama: tabel user tanpa kolom unit_kerja
+import sqlite3, tempfile as _tf
+_p = Path(_tf.mkdtemp()) / "lama.db"; _cx = sqlite3.connect(_p)
+_cx.execute('CREATE TABLE "user" (id INTEGER PRIMARY KEY, username VARCHAR(80) NOT NULL UNIQUE, full_name VARCHAR(150), email VARCHAR(150), password_hash VARCHAR(255), auth_source VARCHAR(10), role_id INTEGER, active BOOLEAN, failed_login INTEGER, locked_until DATETIME, last_login DATETIME, must_change_pw BOOLEAN, created_at DATETIME)')
+_cx.execute('INSERT INTO "user"(username, active) VALUES (\'lama\', 1)'); _cx.commit(); _cx.close()
+app2 = create_app({"SQLALCHEMY_DATABASE_URI": f"sqlite:///{_p}"}); init_db(app2)
+with app2.app_context():
+    chk("migrasi: kolom unit_kerja ditambahkan ke DB lama", User.query.filter_by(username="lama").first().unit_kerja in ("", None))
 print(f"\n{sum(RES)}/{len(RES)} lulus")
 sys.exit(0 if all(RES) else 1)

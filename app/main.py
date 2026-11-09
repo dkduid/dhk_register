@@ -8,7 +8,7 @@ from . import audit
 from .auth import perm_required
 from .models import db, Register, Attachment, AttachmentVersion, AuditLog
 from .security import scan_file
-from .services import (COLS, compliance, klas_map, reg_query, fill, import_file, make_template, parse_date, P)
+from .services import (COLS, compliance, klas_map, reg_query, fill, import_file, make_template, parse_date, P, scope_unit, scope_filter, in_scope)
 
 bp = Blueprint("main", __name__)
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"]
@@ -25,6 +25,14 @@ def health():
         except Exception: pass
         return {"status": "error", "db": "down"}, 503
 
+def _guard(r):
+    """Cegah akses register divisi lain lewat ID (IDOR). Dicatat sebagai kejadian keamanan."""
+    if not in_scope(current_user, r):
+        audit.log("AKSES_DIVISI_DITOLAK", menu="Register", category="SECURITY", level="WARN",
+                  detail=f"Register #{r.id} milik '{r.unit_kerja}'; divisi pengguna '{current_user.unit_kerja or '-'}'",
+                  mitre="T1213", tactic="Collection (Data from Information Repositories)")
+        abort(403)
+
 @bp.route("/")
 @login_required
 def home():
@@ -33,7 +41,7 @@ def home():
 @bp.route("/dashboard")
 @perm_required("dashboard")
 def dashboard():
-    regs, kmap, today = Register.query.all(), klas_map(), date.today()
+    regs, kmap, today = scope_filter(Register.query, current_user).all(), klas_map(), date.today()
     ym = []
     y, m = today.year, today.month
     for i in range(11, -1, -1):
@@ -67,18 +75,22 @@ def dashboard():
 @perm_required("register_view")
 def register_list():
     page = request.args.get("page", 1, type=int)
-    pg = reg_query(request.args).paginate(page=page, per_page=15, error_out=False)
+    pg = reg_query(request.args, current_user).paginate(page=page, per_page=15, error_out=False)
     kmap = klas_map()
     return render_template("register_list.html", pg=pg, kmap=kmap, comp={r.id: compliance(r, kmap) for r in pg.items},
                            klas=P("KLASIFIKASI"), units=P("UNIT_KERJA"))
 
 def _form_ctx(r):
     return dict(r=r, klas=P("KLASIFIKASI"), units=P("UNIT_KERJA"), media=P("MEDIA"), cara=P("CARA_KIRIM_PASSWORD"),
-                tujuan=P("TUJUAN"), kmap_json={k: v for k, v in klas_map().items()})
+                tujuan=P("TUJUAN"), kmap_json={k: v for k, v in klas_map().items()}, scope=scope_unit(current_user))
 
 def _save(r, new):
     before = {c: getattr(r, c) for c, _, _ in COLS}
     fill(r, request.form)
+    su = scope_unit(current_user)
+    if su == "":
+        flash("Akun Anda belum dikaitkan dengan divisi; hubungi administrator.", "error"); return False
+    if su is not None: r.unit_kerja = su   # pengguna per divisi: unit kerja selalu divisinya sendiri
     miss = [l for c, l, _ in COLS if c in ("tanggal_permintaan", "unit_kerja", "dokumen_hukum", "pihak_ketiga") and not getattr(r, c)]
     if miss:
         flash("Lengkapi kolom wajib: " + ", ".join(miss), "error"); return False
@@ -101,7 +113,7 @@ def register_new():
 @bp.route("/register/<int:rid>/edit", methods=["GET", "POST"])
 @perm_required("register_edit")
 def register_edit(rid):
-    r = db.get_or_404(Register, rid)
+    r = db.get_or_404(Register, rid); _guard(r)
     if request.method == "POST" and _save(r, False):
         flash("Perubahan tersimpan.", "ok"); return redirect(url_for("main.register_detail", rid=r.id))
     return render_template("register_form.html", **_form_ctx(r))
@@ -109,13 +121,13 @@ def register_edit(rid):
 @bp.route("/register/<int:rid>")
 @perm_required("register_view")
 def register_detail(rid):
-    r = db.get_or_404(Register, rid); kmap = klas_map()
+    r = db.get_or_404(Register, rid); _guard(r); kmap = klas_map()
     return render_template("register_detail.html", r=r, issues=compliance(r, kmap), meta=kmap.get(r.klasifikasi) or {}, COLS=COLS)
 
 @bp.route("/register/<int:rid>/delete", methods=["POST"])
 @perm_required("register_delete")
 def register_delete(rid):
-    r = db.get_or_404(Register, rid); info = f"#{r.id} {r.dokumen_hukum[:80]} ({r.pihak_ketiga[:60]})"
+    r = db.get_or_404(Register, rid); _guard(r); info = f"#{r.id} {r.dokumen_hukum[:80]} ({r.pihak_ketiga[:60]})"
     db.session.delete(r); db.session.commit()
     audit.log("HAPUS_REGISTER", menu="Register", detail=info, level="WARN"); flash("Register dihapus.", "ok")
     return redirect(url_for("main.register_list"))
@@ -123,7 +135,7 @@ def register_delete(rid):
 @bp.route("/register/<int:rid>/upload", methods=["POST"])
 @perm_required("document_upload")
 def upload(rid):
-    r = db.get_or_404(Register, rid); aid = request.form.get("attachment_id", type=int); note = request.form.get("note", "")[:250]
+    r = db.get_or_404(Register, rid); _guard(r); aid = request.form.get("attachment_id", type=int); note = request.form.get("note", "")[:250]
     done = 0
     for f in request.files.getlist("files"):
         if not f or not f.filename: continue
@@ -148,7 +160,7 @@ def upload(rid):
 @bp.route("/dokumen/<int:vid>")
 @perm_required("document_download")
 def download(vid):
-    v = db.get_or_404(AttachmentVersion, vid)
+    v = db.get_or_404(AttachmentVersion, vid); _guard(v.attachment.register)
     audit.log("UNDUH_DOKUMEN", menu="Dokumen", detail=f"Register #{v.attachment.register_id}: {v.filename} v{v.version}")
     return send_file(io.BytesIO(v.content), download_name=v.filename, mimetype=v.mime, as_attachment=True)
 

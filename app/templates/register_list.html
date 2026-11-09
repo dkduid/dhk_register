@@ -4,7 +4,7 @@
 {% if current_user.can('register_edit') %}<a class="btn pri" href="{{ url_for('main.register_new') }}">Tambah register</a>{% endif %}{% endcall %}
 <form class="filters card" method="get"><input name="q" value="{{ request.args.q }}" placeholder="Cari dokumen, pihak ketiga, PIC…">
 <select name="klasifikasi"><option value="">Semua klasifikasi</option>{% for p in klas %}<option {{ 'selected' if request.args.klasifikasi == p.label }}>{{ p.label }}</option>{% endfor %}</select>
-<select name="unit_kerja"><option value="">Semua unit kerja</option>{% for p in units %}<option {{ 'selected' if request.args.unit_kerja == p.label }}>{{ p.label }}</option>{% endfor %}</select>
+{% if div_scope is none %}<select name="unit_kerja"><option value="">Semua unit kerja</option>{% for p in units %}<option {{ 'selected' if request.args.unit_kerja == p.label }}>{{ p.label }}</option>{% endfor %}</select>{% endif %}
 <select name="nda"><option value="">NDA: semua</option><option value="Y" {{ 'selected' if request.args.nda == 'Y' }}>NDA ada</option><option value="T" {{ 'selected' if request.args.nda == 'T' }}>Tanpa NDA</option></select>
 <select name="data_pribadi"><option value="">Data pribadi: semua</option><option value="Y" {{ 'selected' if request.args.data_pribadi == 'Y' }}>Memuat data pribadi</option><option value="T" {{ 'selected' if request.args.data_pribadi == 'T' }}>Tanpa data pribadi</option></select>
 <input type="date" name="dari" value="{{ request.args.dari }}" title="Dari tanggal"><input type="date" name="sampai" value="{{ request.args.sampai }}" title="Sampai tanggal">

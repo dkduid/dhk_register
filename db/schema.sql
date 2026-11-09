@@ -102,7 +102,8 @@ CREATE TABLE "user" (
 	failed_login INTEGER, 
 	locked_until TIMESTAMP WITHOUT TIME ZONE, 
 	last_login TIMESTAMP WITHOUT TIME ZONE, 
-	must_change_pw BOOLEAN, 
+	must_change_pw BOOLEAN,
+	unit_kerja VARCHAR(150),
 	created_at TIMESTAMP WITHOUT TIME ZONE, 
 	PRIMARY KEY (id), 
 	FOREIGN KEY(role_id) REFERENCES role (id)

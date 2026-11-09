@@ -58,6 +58,7 @@ def create_app(overrides=None):
 
     @app.context_processor
     def _ctx():
+        from .services import scope_unit
         warn = 0
         try:
             if current_user.is_authenticated and current_user.can("audit"):
@@ -65,7 +66,11 @@ def create_app(overrides=None):
         except Exception:
             try: db.session.rollback()
             except Exception: pass
-        return dict(P=P, CAT_LABEL=CAT_LABEL, sec_warn=warn)
+        ds = None
+        try:
+            if current_user.is_authenticated: ds = scope_unit(current_user)
+        except Exception: pass
+        return dict(P=P, CAT_LABEL=CAT_LABEL, sec_warn=warn, div_scope=ds)
 
     @app.template_filter("filesize")
     def _filesize(n):
@@ -104,6 +109,25 @@ def create_app(overrides=None):
             return "Terjadi kesalahan pada aplikasi (E-APP-01). Hubungi administrator; rincian ada di logs/error.log.", 500
     return app
 
+def _migrate(app):
+    """Migrasi ringan untuk database yang dibuat versi lama (idempoten)."""
+    from sqlalchemy import inspect as _insp, text as _text
+    eng = db.engine; tbl = User.__tablename__
+    cols = {c["name"] for c in _insp(eng).get_columns(tbl)}
+    if "unit_kerja" not in cols:
+        q = eng.dialect.identifier_preparer.quote(tbl)
+        with eng.begin() as cx: cx.execute(_text(f"ALTER TABLE {q} ADD COLUMN unit_kerja VARCHAR(150) DEFAULT ''"))
+        app.logger.warning("Migrasi: kolom %s.unit_kerja ditambahkan.", tbl)
+    # izin baru: Administrator (dan Super Admin) otomatis boleh melihat semua divisi
+    changed = False
+    for name in ("Administrator", "Super Admin"):
+        r = Role.query.filter_by(name=name).first()
+        if r and "all_divisions" not in (r.permissions or []):
+            r.permissions = list(r.permissions or []) + ["all_divisions"]; changed = True
+    if not Role.query.filter_by(name="Super Admin").first() and Role.query.filter_by(name="Administrator").first():
+        db.session.add(Role(name="Super Admin", description="Akses penuh, semua divisi", permissions=list(PERMS))); changed = True
+    if changed: db.session.commit()
+
 def init_db(app):
     """Idempotent: buat tabel + seed role, parameter, dan admin awal."""
     with app.app_context():
@@ -116,9 +140,11 @@ def init_db(app):
             for n, d, pm in [("Administrator", "Akses penuh", allp),
                              ("Legal & Compliance", "Pengelola register DHK", ["dashboard", "register_view", "register_edit", "register_import", "document_upload", "document_download", "report"]),
                              ("Auditor", "Baca saja + audit log", ["dashboard", "register_view", "document_download", "report", "audit"]),
-                             ("Viewer", "Hanya melihat", ["dashboard", "register_view"])]:
+                             ("Viewer", "Hanya melihat", ["dashboard", "register_view"]),
+                             ("Super Admin", "Akses penuh, semua divisi", allp)]:
                 db.session.add(Role(name=n, description=d, permissions=pm))
             db.session.commit()
+        _migrate(app)
         if Parameter.query.count() == 0:
             K = lambda l, d, lv, c, w, p, n: Parameter(category="KLASIFIKASI", label=l, description=d, sort_order=5 - lv, meta=dict(color=c, level=lv, req_wm=w, req_pw=p, req_nda=n))
             seed = [K("Sangat Rahasia", "Dampak sangat berat bila bocor (ISO 27001 A.5.12 / NIST FIPS 199: High). Wajib watermark, password, NDA.", 4, "#b42318", True, True, True),

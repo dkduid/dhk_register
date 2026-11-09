@@ -53,8 +53,23 @@ def compliance(r, kmap):
     if r.password and not r.cara_kirim_password: out.append("Cara kirim password belum diisi")
     return out
 
-def reg_query(args):
+def scope_unit(user):
+    """None = semua divisi. String = hanya register divisi itu ('' = divisi belum diatur: tidak melihat apa pun)."""
+    if user.can("all_divisions"): return None
+    return (getattr(user, "unit_kerja", "") or "").strip()
+
+def scope_filter(q, user):
+    u = scope_unit(user)
+    if u is None: return q
+    return q.filter(Register.unit_kerja == u) if u else q.filter(Register.id < 0)
+
+def in_scope(user, r):
+    u = scope_unit(user)
+    return u is None or (bool(u) and (r.unit_kerja or "") == u)
+
+def reg_query(args, user=None):
     q, s = Register.query, (args.get("q") or "").strip()
+    if user is not None: q = scope_filter(q, user)
     if s:
         like = f"%{s}%"
         q = q.filter(or_(*[getattr(Register, c).ilike(like) for c in
@@ -136,6 +151,8 @@ def _read_rows(name, data):
     return list(csv.reader(io.StringIO(txt), dialect))
 
 def import_file(name, data, user, max_rows=5000):
+    su = scope_unit(user)
+    if su == "": return 0, ["Akun Anda belum dikaitkan dengan divisi; hubungi administrator."]
     rows = _read_rows(name, data)
     hi, mapping = None, {}
     for i, row in enumerate(rows[:15]):
@@ -153,6 +170,7 @@ def import_file(name, data, user, max_rows=5000):
         for f, v in vals.items():
             t = types[f]
             setattr(r, f, parse_bool(v) if t == "bool" else parse_date(v) if t == "date" else str(v if v is not None else "").strip()[:500])
+        if su is not None: r.unit_kerja = su   # pengguna per divisi hanya dapat mengimpor untuk divisinya
         db.session.add(r); ok += 1
     db.session.commit(); return ok, errs
 

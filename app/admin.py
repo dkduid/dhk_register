@@ -5,7 +5,7 @@ from sqlalchemy import or_
 from . import audit
 from .auth import perm_required, valid_password
 from .models import db, Parameter, User, Role, Register, AuditLog, PERMS
-from .services import CATMAP, CAT_LABEL
+from .services import CATMAP, CAT_LABEL, P
 from .services import parse_date
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
@@ -72,7 +72,7 @@ def users():
         if u and any(x.ts > r.ts and u.username in (x.detail or "") for x in resets): continue
         if u and u.last_login and u.last_login > r.ts: continue  # sudah berhasil login setelah permintaan
         reqs.append((r, u))
-    return render_template("users.html", users=users, roles=Role.query.order_by(Role.name).all(), edit=edit, now=datetime.now(), reqs=reqs)
+    return render_template("users.html", users=users, roles=Role.query.order_by(Role.name).all(), edit=edit, now=datetime.now(), reqs=reqs, units=P("UNIT_KERJA"))
 
 @bp.route("/pengguna/save", methods=["POST"])
 @perm_required("user")
@@ -84,6 +84,8 @@ def user_save():
         u.username = username
     u.full_name, u.email = (f.get("full_name") or "")[:150], (f.get("email") or "")[:150]
     u.role_id = f.get("role_id", type=int); u.active = f.get("active") == "1"
+    unit = (f.get("unit_kerja") or "").strip()[:150]
+    u.unit_kerja = unit if (not unit or Parameter.query.filter_by(category="UNIT_KERJA", label=unit).first()) else ""
     if not uid: u.auth_source = f.get("auth_source") if f.get("auth_source") in ("local", "ldap") else "local"
     pw = f.get("password", "")
     if u.auth_source == "local" and (pw or not uid):
@@ -91,8 +93,12 @@ def user_save():
         if err: flash(err, "error"); return redirect(url_for("admin.users", edit=uid))
         u.set_password(pw); u.must_change_pw = True
     if not uid: db.session.add(u)
-    db.session.commit(); audit.log("UBAH_USER" if uid else "TAMBAH_USER", menu="Pengguna", detail=f"{u.username} ({u.auth_source}) role={u.role.name if u.role else '-'} aktif={u.active}")
-    flash("Pengguna tersimpan.", "ok"); return redirect(url_for("admin.users"))
+    db.session.commit(); audit.log("UBAH_USER" if uid else "TAMBAH_USER", menu="Pengguna", detail=f"{u.username} ({u.auth_source}) role={u.role.name if u.role else '-'} divisi={u.unit_kerja or '-'} aktif={u.active}")
+    role = db.session.get(Role, u.role_id) if u.role_id else None
+    if role and "all_divisions" not in (role.permissions or []) and not u.unit_kerja:
+        flash(f"Pengguna tersimpan, tetapi divisi belum diisi: {u.username} tidak akan melihat data register apa pun sampai divisinya diatur.", "error")
+    else: flash("Pengguna tersimpan.", "ok")
+    return redirect(url_for("admin.users"))
 
 @bp.route("/pengguna/<int:uid>/buka-kunci", methods=["POST"])
 @perm_required("user")

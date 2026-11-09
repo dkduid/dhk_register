@@ -18,7 +18,7 @@ def build(args):
         return ("Laporan audit log", ["Waktu", "User", "IP", "Kategori", "Level", "Aksi", "Menu", "Detail", "MITRE ATT&CK"],
                 [[r.ts.strftime("%d/%m/%Y %H:%M:%S"), r.username, r.ip or "", r.category, r.level, r.action, r.menu or "", r.detail or "",
                   f"{r.mitre_id or ''} {r.mitre_tactic or ''}".strip()] for r in rows])
-    regs = reg_query(args).limit(50000).all(); h, rows = register_table(regs)
+    regs = reg_query(args, current_user).limit(50000).all(); h, rows = register_table(regs)
     return "Laporan register pendistribusian dokumen hukum", h, rows
 
 def _meta(args):

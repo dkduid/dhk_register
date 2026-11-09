@@ -26,6 +26,7 @@
 <main class="main"><button class="burger" id="burger" aria-label="Menu">Menu</button>
 {% else %}<main class="plain">{% endif %}
 {% with m = get_flashed_messages(with_categories=true) %}{% for c, t in m %}<div class="flash {{ c }}" role="alert">{{ t }}</div>{% endfor %}{% endwith %}
+{% if current_user.is_authenticated and div_scope is not none %}{% if div_scope %}<div class="flash ok" role="status">Data dibatasi pada divisi: <b>{{ div_scope }}</b></div>{% else %}<div class="flash error" role="alert">Akun Anda belum dikaitkan dengan divisi, sehingga tidak ada data yang ditampilkan. Hubungi administrator.</div>{% endif %}{% endif %}
 {% block body %}{% endblock %}
 </main>
 {% if current_user.is_authenticated %}</div>{% endif %}
