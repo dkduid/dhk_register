@@ -126,5 +126,16 @@ c4 = app.test_client()
 r = c4.post("/login", data={"username": "rina", "password": tmp}, follow_redirects=True); chk("login dengan password sementara wajib ganti password", b"/password" in r.request.path.encode() or b"Ganti" in r.data, r.request.path)
 with app.app_context():
     chk("audit RESET_PASSWORD & PERMINTAAN_RESET_PASSWORD", {"RESET_PASSWORD", "PERMINTAAN_RESET_PASSWORD"} <= {a for (a,) in db.session.query(AuditLog.action).distinct()})
+# --- hapus pengguna ---
+r = c.post("/admin/pengguna/save", data={"username": "tmpdel", "full_name": "Tmp", "role_id": 4, "password": "Tmp#Passw0rd1", "active": "1"}, follow_redirects=True)
+with app.app_context():
+    did = User.query.filter_by(username="tmpdel").first().id
+r = c.post(f"/admin/pengguna/{did}/hapus", follow_redirects=True); chk("hapus akun aktif ditolak", b"Nonaktifkan akun" in r.data)
+c.post("/admin/pengguna/save", data={"id": did, "username": "tmpdel", "full_name": "Tmp", "role_id": 4}, follow_redirects=True)
+r = c.post(f"/admin/pengguna/{did}/hapus", follow_redirects=True); chk("hapus akun nonaktif berhasil", b"tmpdel dihapus" in r.data)
+with app.app_context():
+    chk("akun terhapus & audit HAPUS_USER ada", User.query.filter_by(username="tmpdel").first() is None and AuditLog.query.filter_by(action="HAPUS_USER").count() == 1)
+    aid = User.query.filter_by(username="admin").first().id
+r = c.post(f"/admin/pengguna/{aid}/hapus", follow_redirects=True); chk("tidak bisa hapus diri sendiri", b"sedang dipakai" in r.data)
 print(f"\n{sum(RES)}/{len(RES)} lulus")
 sys.exit(0 if all(RES) else 1)

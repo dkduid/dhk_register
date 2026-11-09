@@ -115,6 +115,22 @@ def user_reset(uid):
     flash(f"Password sementara untuk {u.username}: {pw}  (tampil sekali; sampaikan lewat saluran aman. Wajib diganti saat login.)", "ok")
     return redirect(url_for("admin.users"))
 
+@bp.route("/pengguna/<int:uid>/hapus", methods=["POST"])
+@perm_required("user")
+def user_delete(uid):
+    """Hapus akun yang NONAKTIF. Jejak audit tetap ada (audit menyimpan username, bukan relasi)."""
+    from flask_login import current_user
+    u = db.get_or_404(User, uid)
+    if u.id == current_user.id:
+        flash("Tidak dapat menghapus akun yang sedang dipakai.", "error"); return redirect(url_for("admin.users"))
+    if u.active:
+        flash("Nonaktifkan akun terlebih dahulu (menu Ubah > Status Nonaktif), baru dapat dihapus.", "error"); return redirect(url_for("admin.users"))
+    name, src = u.username, u.auth_source
+    db.session.delete(u); db.session.commit()
+    audit.log("HAPUS_USER", menu="Pengguna", detail=f"{name} ({src}) dihapus", level="WARN")
+    flash(f"Pengguna {name} dihapus. Riwayat auditnya tetap tersimpan.", "ok")
+    return redirect(url_for("admin.users"))
+
 # ---------- Hak akses ----------
 @bp.route("/hak-akses")
 @perm_required("role")
