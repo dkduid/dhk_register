@@ -101,13 +101,18 @@ def _save(r, new):
     audit.log("TAMBAH_REGISTER" if new else "UBAH_REGISTER", menu="Register", detail=f"#{r.id} {r.dokumen_hukum[:80]}" + ("" if new else f" | kolom diubah: {', '.join(chg) or '-'}"))
     return True
 
+def _after_save(r):
+    """Ke halaman detail bila pengguna boleh melihat register; bila tidak, kembali ke formulir (hindari 403 setelah simpan)."""
+    if current_user.can("register_view"): return redirect(url_for("main.register_detail", rid=r.id))
+    return redirect(url_for("main.register_new"))
+
 @bp.route("/register/new", methods=["GET", "POST"])
 @perm_required("register_edit")
 def register_new():
     r = Register(tanggal_permintaan=date.today())
     if request.method == "POST":
         r = Register()
-        if _save(r, True): flash("Register tersimpan.", "ok"); return redirect(url_for("main.register_detail", rid=r.id))
+        if _save(r, True): flash("Register tersimpan.", "ok"); return _after_save(r)
     return render_template("register_form.html", **_form_ctx(r))
 
 @bp.route("/register/<int:rid>/edit", methods=["GET", "POST"])
@@ -115,7 +120,7 @@ def register_new():
 def register_edit(rid):
     r = db.get_or_404(Register, rid); _guard(r)
     if request.method == "POST" and _save(r, False):
-        flash("Perubahan tersimpan.", "ok"); return redirect(url_for("main.register_detail", rid=r.id))
+        flash("Perubahan tersimpan.", "ok"); return _after_save(r)
     return render_template("register_form.html", **_form_ctx(r))
 
 @bp.route("/register/<int:rid>")

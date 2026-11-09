@@ -189,5 +189,12 @@ _cx.execute('INSERT INTO "user"(username, active) VALUES (\'lama\', 1)'); _cx.co
 app2 = create_app({"SQLALCHEMY_DATABASE_URI": f"sqlite:///{_p}"}); init_db(app2)
 with app2.app_context():
     chk("migrasi: kolom unit_kerja ditambahkan ke DB lama", User.query.filter_by(username="lama").first().unit_kerja in ("", None))
+# --- simpan register tanpa izin melihat: tidak boleh berakhir 403 ---
+c.post("/admin/hak-akses/save", data={"name": "Input Saja", "perms": ["register_edit"]}, follow_redirects=True)
+with app.app_context(): iid = Role.query.filter_by(name="Input Saja").first().id
+c.post("/admin/pengguna/save", data={"username": "input1", "full_name": "I", "role_id": iid, "unit_kerja": TI, "password": "Staf#Passw0rd1", "active": "1"}, follow_redirects=True)
+ci = login_as("input1")
+r = ci.post("/register/new", data={**f, "dokumen_hukum": "Dok-Input-Saja"}, follow_redirects=True)
+chk("simpan tanpa izin lihat: tidak 403", r.status_code == 200 and b"Register tersimpan" in r.data, r.status_code)
 print(f"\n{sum(RES)}/{len(RES)} lulus")
 sys.exit(0 if all(RES) else 1)
