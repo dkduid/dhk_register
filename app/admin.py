@@ -70,6 +70,7 @@ def users():
         seen.add(key)
         u = next((x for x in users if x.username.lower() == key), None)
         if u and any(x.ts > r.ts and u.username in (x.detail or "") for x in resets): continue
+        if u and u.last_login and u.last_login > r.ts: continue  # sudah berhasil login setelah permintaan
         reqs.append((r, u))
     return render_template("users.html", users=users, roles=Role.query.order_by(Role.name).all(), edit=edit, now=datetime.now(), reqs=reqs)
 
