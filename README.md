@@ -28,10 +28,32 @@ Migrasi server: `pg_dump` -> `pg_restore` (lihat docs\04_Dokumentasi_Konfigurasi
 | Pindai sebelum simpan (tipe, magic bytes, makro, JS di PDF, polyglot, zip bomb, EICAR, ClamAV opsional) | `app/security.py` |
 | Grafik & tabel | Dashboard · Register |
 | Hak akses (role × menu) | Administrasi → Hak akses, Pengguna |
+| Akun login per divisi (10 divisi); data dibatasi pada divisi pengguna | `DHKRegister.exe --akun-divisi` · Pengguna → Divisi |
 | Audit log (aktivitas, keamanan, application log) | Administrasi → Audit log |
 | Laporan berfilter periode, unduh Excel/PDF/CSV/Word, tercatat di audit log | Laporan |
 | Login admin-terdaftar atau LDAP | `.env` → `LDAP_*` |
 | Deteksi serangan ↔ MITRE ATT&CK | `app/security.py`, `app/auth.py` |
+
+## Akun per divisi
+`DHKRegister.exe --akun-divisi` (WSL2: `python run.py --akun-divisi`) membuat satu akun lokal per divisi dengan peran
+**Pengguna Divisi** (dashboard, register, dokumen, laporan — hanya divisinya). Akun yang sudah ada tidak diubah; password
+sementara hanya ditulis ke `AKUN_DIVISI_AWAL.txt` (bagikan lewat kanal aman lalu hapus; wajib diganti saat login pertama).
+
+| Username | Divisi |
+|---|---|
+| div.ti | Divisi Teknologi Informasi |
+| div.audit | Divisi Audit |
+| div.sdm | Divisi SDM, Pengadaan dan Umum |
+| div.pbk | Divisi Operasional dan Pengembangan Bisnis PBK dan Aset Digital |
+| div.pfk | Divisi Operasional dan Pengembangan Bisnis PFK |
+| div.srg | Divisi Operasional dan Pengembangan Bisnis SRG |
+| div.sekper | Divisi Sekretaris Perusahaan |
+| div.renstra | Divisi Strategis dan Perencanaan |
+| div.mr | Divisi Manajemen Risiko |
+| div.keuangan | Divisi Keuangan dan Akuntansi |
+
+Saat start, parameter Unit kerja disesuaikan sekali: 10 divisi ditambahkan, unit bawaan lama yang belum dipakai
+register/pengguna dinonaktifkan (yang sudah dipakai tetap aktif).
 
 ## Pemetaan MITRE ATT&CK
 | Deteksi | Teknik |

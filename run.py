@@ -6,6 +6,7 @@
   DHKRegister.exe --healthcheck    cek apakah aplikasi yang sedang berjalan sehat (exit 0 = sehat)
   DHKRegister.exe --export-schema  tulis db\\schema.sql
   DHKRegister.exe --reset-admin [USERNAME]   setel ulang password akun (bawaan: admin), buka kunci, wajib ganti saat login
+  DHKRegister.exe --akun-divisi    buat satu akun login per divisi (password sementara ke AKUN_DIVISI_AWAL.txt)
 
 Kode keluar: 0 sukses | 1 error tak terduga | 2 gagal startup terklasifikasi (lihat logs\\STARTUP_ERROR.txt) | 3 diagnose menemukan masalah
 """
@@ -119,6 +120,26 @@ def do_reset_admin(username):
     return 0
 
 
+def do_division_accounts():
+    """Buat akun per divisi; password sementara hanya ditulis ke AKUN_DIVISI_AWAL.txt (tidak ke layar)."""
+    from app import create_division_accounts
+    app, _ = prepare_app()
+    with app.app_context():
+        rows = create_division_accounts()
+    made = [r for r in rows if r[2]]
+    for label, un, pw in rows:
+        print(f"  {un:<14} {label}{'' if pw else '  (sudah ada, tidak diubah)'}")
+    if made:
+        out = Config.BASE_DIR / "AKUN_DIVISI_AWAL.txt"
+        out.write_text("Akun login divisi Register DHK - password sementara, wajib diganti saat login pertama.\n"
+                       "Bagikan ke tiap divisi melalui kanal aman, lalu HAPUS file ini.\n\n"
+                       + "\n".join(f"{label}\n  username: {un}\n  password: {pw}\n" for label, un, pw in made), encoding="utf-8")
+        print(f"\n{len(made)} akun dibuat. Password sementara: {out}")
+    else:
+        print("\nSemua akun divisi sudah ada.")
+    return 0
+
+
 def do_diagnose():
     from app import create_app
     from app.dbsetup import diagnose, format_report
@@ -144,6 +165,7 @@ def main():
     ap.add_argument("--export-schema", action="store_true")
     ap.add_argument("--version", action="store_true")
     ap.add_argument("--reset-admin", nargs="?", const="", metavar="USERNAME")
+    ap.add_argument("--akun-divisi", action="store_true")
     a = ap.parse_args()
     init_logging(Config.BASE_DIR / "logs")
     install_hooks()
@@ -167,6 +189,8 @@ def main():
             return 0
         if a.reset_admin is not None:
             return do_reset_admin(a.reset_admin or Config.ADMIN_USERNAME)
+        if a.akun_divisi:
+            return do_division_accounts()
         app, state = prepare_app()
         clear_startup_error()
         if a.init_db:

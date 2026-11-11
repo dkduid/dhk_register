@@ -5,7 +5,7 @@ from flask_login import LoginManager, current_user
 from flask_wtf.csrf import CSRFProtect, CSRFError
 from config import Config
 from . import audit, security
-from .models import db, User, Role, Parameter, AuditLog, AppInfo, PERMS
+from .models import db, User, Role, Parameter, Register, AuditLog, AppInfo, PERMS
 from .errors import init_logging, classify, StartupError
 from .dbsetup import verify_schema
 from sqlalchemy.exc import OperationalError, InterfaceError
@@ -18,6 +18,19 @@ lm.login_view = "auth.login"; lm.login_message = "Silakan masuk terlebih dahulu.
 MENU = {"main.dashboard": "Dashboard", "main.register_list": "Register", "main.register_detail": "Detail register", "main.register_new": "Tambah register",
         "main.register_edit": "Ubah register", "main.register_import": "Import template", "reports.reports": "Laporan", "admin.parameters": "Parameter",
         "admin.users": "Pengguna", "admin.roles": "Hak akses", "admin.audit_view": "Audit log", "auth.password": "Ubah password"}
+
+# Divisi pengguna (label parameter UNIT_KERJA, username akun login divisi)
+DIVISIONS = [("Divisi Teknologi Informasi", "div.ti"), ("Divisi Audit", "div.audit"),
+             ("Divisi SDM, Pengadaan dan Umum", "div.sdm"),
+             ("Divisi Operasional dan Pengembangan Bisnis PBK dan Aset Digital", "div.pbk"),
+             ("Divisi Operasional dan Pengembangan Bisnis PFK", "div.pfk"),
+             ("Divisi Operasional dan Pengembangan Bisnis SRG", "div.srg"),
+             ("Divisi Sekretaris Perusahaan", "div.sekper"), ("Divisi Strategis dan Perencanaan", "div.renstra"),
+             ("Divisi Manajemen Risiko", "div.mr"), ("Divisi Keuangan dan Akuntansi", "div.keuangan")]
+DIVISION_ROLE = ("Pengguna Divisi", "Mengajukan & memantau register divisinya sendiri",
+                 ["dashboard", "register_view", "register_edit", "document_upload", "document_download", "report"])
+# Unit kerja bawaan v1.1 yang digantikan daftar divisi (dinonaktifkan bila belum dipakai)
+LEGACY_UNITS = ["Operasional Kliring", "Pasar Fisik Komoditas", "Sistem Resi Gudang", "Keuangan", "Manajemen Risiko", "SDM dan Umum"]
 
 def create_app(overrides=None):
     # Windows membaca tipe MIME dari registry; bila .js/.css salah (mis. text/plain) 'nosniff' membuat peramban menolaknya.
@@ -126,7 +139,41 @@ def _migrate(app):
             r.permissions = list(r.permissions or []) + ["all_divisions"]; changed = True
     if not Role.query.filter_by(name="Super Admin").first() and Role.query.filter_by(name="Administrator").first():
         db.session.add(Role(name="Super Admin", description="Akses penuh, semua divisi", permissions=list(PERMS))); changed = True
+    if not Role.query.filter_by(name=DIVISION_ROLE[0]).first():
+        db.session.add(Role(name=DIVISION_ROLE[0], description=DIVISION_ROLE[1], permissions=list(DIVISION_ROLE[2]))); changed = True
     if changed: db.session.commit()
+
+def _sync_divisions(app):
+    """Sekali per database: tambahkan 10 divisi ke UNIT_KERJA dan nonaktifkan unit bawaan lama yang belum dipakai."""
+    if db.session.get(AppInfo, "divisions_v1"): return
+    labels = {p.label.lower(): p for p in Parameter.query.filter_by(category="UNIT_KERJA").all()}
+    top = max([p.sort_order or 0 for p in labels.values()] + [0])
+    for i, (label, _) in enumerate(DIVISIONS, 1):
+        p = labels.get(label.lower())
+        if p: p.active = True
+        else: db.session.add(Parameter(category="UNIT_KERJA", label=label, sort_order=top + i, meta={}))
+    for label in LEGACY_UNITS:
+        p = labels.get(label.lower())
+        if p and not Register.query.filter_by(unit_kerja=p.label).first() and not User.query.filter_by(unit_kerja=p.label).first():
+            p.active = False
+    db.session.add(AppInfo(key="divisions_v1", value=datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+    db.session.commit()
+    app.logger.info("Daftar divisi (UNIT_KERJA) disesuaikan: %d divisi.", len(DIVISIONS))
+
+def create_division_accounts():
+    """Satu akun lokal per divisi (role Pengguna Divisi). Akun yang sudah ada tidak diubah.
+    Mengembalikan [(divisi, username, password_sementara|None)]."""
+    role = Role.query.filter_by(name=DIVISION_ROLE[0]).first()
+    out = []
+    for label, username in DIVISIONS:
+        if User.query.filter(db.func.lower(User.username) == username).first():
+            out.append((label, username, None)); continue
+        pw = secrets.token_urlsafe(9) + "aA1!"
+        u = User(username=username, full_name=label, role=role, unit_kerja=label, must_change_pw=True, auth_source="local")
+        u.set_password(pw); db.session.add(u); db.session.commit()
+        audit.log("TAMBAH_USER", menu="CLI", detail=f"--akun-divisi: {username} ({label})", username="CLI")
+        out.append((label, username, pw))
+    return out
 
 def init_db(app):
     """Idempotent: buat tabel + seed role, parameter, dan admin awal."""
@@ -151,12 +198,13 @@ def init_db(app):
                     K("Rahasia", "Dampak berat bila bocor (Confidential). Wajib watermark, password, NDA.", 3, "#d9480f", True, True, True),
                     K("Terbatas", "Hanya untuk pihak berkepentingan (Restricted/Internal). Wajib watermark.", 2, "#b7791f", True, False, False),
                     K("Publik", "Boleh dibagikan (Public). Tidak ada kontrol wajib.", 1, "#2f855a", False, False, False)]
-            for cat, items in {"UNIT_KERJA": ["Divisi Teknologi Informasi", "Hukum dan Kepatuhan", "Operasional Kliring", "Pasar Fisik Komoditas", "Sistem Resi Gudang", "Keuangan", "Manajemen Risiko", "SDM dan Umum"],
+            for cat, items in {"UNIT_KERJA": ["Hukum dan Kepatuhan"] + [d for d, _ in DIVISIONS],
                                "MEDIA": ["Email", "Portal / Data Room", "Media fisik (USB)", "Hardcopy", "Aplikasi kolaborasi"],
                                "CARA_KIRIM_PASSWORD": ["Telepon", "WhatsApp", "Email terpisah", "Media lainnya"],
                                "TUJUAN": ["Due diligence", "Audit", "Regulator (BAPPEBTI/OJK)", "Kontrak / kerja sama", "Litigasi", "Lainnya"]}.items():
                 seed += [Parameter(category=cat, label=i, sort_order=n, meta={}) for n, i in enumerate(items)]
             db.session.add_all(seed); db.session.commit()
+        _sync_divisions(app)
         if User.query.count() == 0:
             c = app.config; pw = c["ADMIN_PASSWORD"] or (secrets.token_urlsafe(9) + "aA1!")
             u = User(username=c["ADMIN_USERNAME"], full_name="Administrator", role=Role.query.filter_by(name="Administrator").first(), must_change_pw=True)

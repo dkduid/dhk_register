@@ -3,6 +3,7 @@
 .env.bak_*
 *.pem
 *.key
+AKUN_DIVISI_AWAL.txt
 certs/
 # Runtime
 logs/

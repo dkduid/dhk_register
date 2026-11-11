@@ -32,6 +32,7 @@ Skrip idempoten: `.env` yang sudah ada dipertahankan, berkas aplikasi disinkronk
 | Restart aplikasi | `wsl -d Ubuntu-24.04 -u root -- systemctl restart dhk-register` |
 | Diagnosa penuh | `wsl -d Ubuntu-24.04 -u dhk -- /opt/dhk_register/venv/bin/python /opt/dhk_register/run.py --diagnose` |
 | Reset password admin | `wsl -d Ubuntu-24.04 -u dhk -- /opt/dhk_register/venv/bin/python /opt/dhk_register/run.py --reset-admin` |
+| Buat akun login per divisi | `wsl -d Ubuntu-24.04 -u dhk -- /opt/dhk_register/venv/bin/python /opt/dhk_register/run.py --akun-divisi` (password sementara di `/opt/dhk_register/AKUN_DIVISI_AWAL.txt`) |
 | Log aplikasi | `\\wsl$\Ubuntu-24.04\opt\dhk_register\logs` |
 | Log instalasi | `/var/log/dhk_install_wsl.log` (di WSL) dan `wsl\logs\install_wsl_*.log` |
 | Cadangan database | `wsl -d Ubuntu-24.04 -u root -- sudo -u postgres pg_dump dhk_register > dhk_register.sql` |

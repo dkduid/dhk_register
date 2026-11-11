@@ -138,7 +138,7 @@ with app.app_context():
     aid = User.query.filter_by(username="admin").first().id
 r = c.post(f"/admin/pengguna/{aid}/hapus", follow_redirects=True); chk("tidak bisa hapus diri sendiri", b"sedang dipakai" in r.data)
 # --- pembatasan data per divisi ---
-TI, KEU = "Divisi Teknologi Informasi", "Keuangan"
+TI, KEU = "Divisi Teknologi Informasi", "Divisi Keuangan dan Akuntansi"
 with app.app_context():
     for i, (u, d) in enumerate([(TI, "Dok-TI-Rahasia"), (KEU, "Dok-KEU-Rahasia")]):
         db.session.add(Register(unit_kerja=u, dokumen_hukum=d, pihak_ketiga="PT Uji", tanggal_permintaan=date.today(), klasifikasi="Rahasia", created_by="t"))
@@ -186,7 +186,7 @@ import sqlite3, tempfile as _tf
 _p = Path(_tf.mkdtemp()) / "lama.db"; _cx = sqlite3.connect(_p)
 _cx.execute('CREATE TABLE "user" (id INTEGER PRIMARY KEY, username VARCHAR(80) NOT NULL UNIQUE, full_name VARCHAR(150), email VARCHAR(150), password_hash VARCHAR(255), auth_source VARCHAR(10), role_id INTEGER, active BOOLEAN, failed_login INTEGER, locked_until DATETIME, last_login DATETIME, must_change_pw BOOLEAN, created_at DATETIME)')
 _cx.execute('INSERT INTO "user"(username, active) VALUES (\'lama\', 1)'); _cx.commit(); _cx.close()
-app2 = create_app({"SQLALCHEMY_DATABASE_URI": f"sqlite:///{_p}"}); init_db(app2)
+app2 = create_app({"SQLALCHEMY_DATABASE_URI": f"sqlite:///{_p}", "SQLALCHEMY_ENGINE_OPTIONS": {}}); init_db(app2)
 with app2.app_context():
     chk("migrasi: kolom unit_kerja ditambahkan ke DB lama", User.query.filter_by(username="lama").first().unit_kerja in ("", None))
 # --- simpan register tanpa izin melihat: tidak boleh berakhir 403 ---
@@ -196,5 +196,34 @@ c.post("/admin/pengguna/save", data={"username": "input1", "full_name": "I", "ro
 ci = login_as("input1")
 r = ci.post("/register/new", data={**f, "dokumen_hukum": "Dok-Input-Saja"}, follow_redirects=True)
 chk("simpan tanpa izin lihat: tidak 403", r.status_code == 200 and b"Register tersimpan" in r.data, r.status_code)
+# --- 10 divisi & akun login per divisi ---
+from app import DIVISIONS, LEGACY_UNITS, create_division_accounts   # noqa: E402
+with app.app_context():
+    aktif = {p.label for p in Parameter.query.filter_by(category="UNIT_KERJA", active=True)}
+    chk("10 divisi tersedia di parameter Unit kerja", {d for d, _ in DIVISIONS} <= aktif)
+    pd = Role.query.filter_by(name="Pengguna Divisi").first()
+    chk("role Pengguna Divisi ada tanpa izin semua divisi", pd and "register_edit" in pd.permissions and "all_divisions" not in pd.permissions)
+    rows = create_division_accounts()
+    chk("akun dibuat untuk 10 divisi", len(rows) == 10 and all(pw for _, _, pw in rows))
+    u = User.query.filter_by(username="div.keuangan").first()
+    chk("akun divisi terhubung ke divisinya & wajib ganti password", u and u.unit_kerja == KEU and u.must_change_pw and u.role.name == "Pengguna Divisi")
+    chk("pembuatan akun divisi idempoten", all(pw is None for _, _, pw in create_division_accounts()))
+    pw_keu = {un: pw for _, un, pw in rows}["div.keuangan"]
+dk = app.test_client(); dk.post("/login", data={"username": "div.keuangan", "password": pw_keu}, follow_redirects=True)
+dk.post("/password", data={"old": pw_keu, "new": "Divisi#Keu2026", "new2": "Divisi#Keu2026"}, follow_redirects=True)
+r = dk.get("/register"); chk("akun div.keuangan hanya melihat register divisinya", b"Dok-KEU-Rahasia" in r.data and b"Dok-TI-Rahasia" not in r.data)
+r = dk.get(f"/register/{ids['Dok-TI-Rahasia']}"); chk("akun div.keuangan ditolak di register divisi lain", r.status_code == 403, r.status_code)
+# DB lama v1.1: unit bawaan lama yang belum dipakai dinonaktifkan, yang dipakai tetap aktif
+_p3 = Path(_tf.mkdtemp()) / "v11.db"
+app3 = create_app({"SQLALCHEMY_DATABASE_URI": f"sqlite:///{_p3}", "SQLALCHEMY_ENGINE_OPTIONS": {}})
+with app3.app_context():
+    db.create_all()
+    for n, l in enumerate(LEGACY_UNITS): db.session.add(Parameter(category="UNIT_KERJA", label=l, sort_order=n, meta={}))
+    db.session.add(Register(unit_kerja="Keuangan", dokumen_hukum="Dok-lama", tanggal_permintaan=date.today(), created_by="t")); db.session.commit()
+init_db(app3)
+with app3.app_context():
+    st = {p.label: p.active for p in Parameter.query.filter_by(category="UNIT_KERJA")}
+    chk("migrasi divisi: 10 divisi ditambahkan ke DB lama", all(st.get(d) for d, _ in DIVISIONS))
+    chk("migrasi divisi: unit lama terpakai tetap aktif, lainnya nonaktif", st.get("Keuangan") is True and st.get("Sistem Resi Gudang") is False)
 print(f"\n{sum(RES)}/{len(RES)} lulus")
 sys.exit(0 if all(RES) else 1)
